@@ -1161,7 +1161,7 @@ verify_domain_resolution() {
             
             if [[ -n "$result" ]]; then
                 echo "使用 $tool 解析结果:"
-                echo "$result" | while read -r ip; do
+                while read -r ip; do
                     if [[ -n "$ip" && "$ip" =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]]; then
                         if [[ "$ip" == "$server_ip" ]]; then
                             echo -e "  ${GREEN}✅ $ip (匹配)${NC}"
@@ -1170,20 +1170,30 @@ verify_domain_resolution() {
                         fi
                         resolved_ips+=("$ip")
                     fi
-                done
+                done <<< "$result"
                 break
             fi
         fi
     done
 
+    local status=1
     if [[ ${#resolved_ips[@]} -eq 0 ]]; then
         log_error "无法解析域名，可能原因:"
         echo "1. 域名DNS设置未生效"
         echo "2. 网络连接问题"
         echo "3. DNS服务器问题"
+    elif printf '%s\n' "${resolved_ips[@]}" | grep -Fxq "$server_ip"; then
+        log_success "域名解析正确"
+        status=0
+    else
+        log_error "域名已解析，但未指向当前服务器IP"
+        echo "当前服务器IP: $server_ip"
+        echo "解析到的IP:"
+        printf '  - %s\n' "${resolved_ips[@]}"
     fi
 
     wait_for_user
+    return "$status"
 }
 
 # 删除服务器域名配置
