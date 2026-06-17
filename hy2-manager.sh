@@ -2550,8 +2550,8 @@ main() {
         read -r choice
         
         # 输入验证
-        if ! validate_input "$choice" 0 13; then
-            log_error "请输入 0-13 之间的数字"
+        if ! validate_input "$choice" 0 14; then
+            log_error "请输入 0-14 之间的数字"
             sleep 2
             continue
         fi
@@ -2570,6 +2570,7 @@ main() {
             11) uninstall_hysteria ;;
             12) about_script ;;
             13) manage_hysteria_core_update ;;
+            14) manage_manager_script_update ;;
             0)
                 echo -e "${GREEN}感谢使用 Hysteria2 配置管理脚本!${NC}"
                 exit 0
@@ -2633,14 +2634,22 @@ print_menu() {
     echo -e "${GREEN}11.${NC} 卸载服务"
     echo -e "${GREEN}12.${NC} 关于脚本"
     echo -e "${CYAN}13.${NC} 检查/更新 Hysteria2 内核"
+    echo -e "${CYAN}14.${NC} 更新管理脚本"
     echo -e "${RED} 0.${NC} 退出"
     echo ""
-    echo -n -e "${BLUE}请输入选项 [0-13]: ${NC}"
+    echo -n -e "${BLUE}请输入选项 [0-14]: ${NC}"
 }
 
 manage_hysteria_core_update() {
     if safe_source_script "$SCRIPTS_DIR/hysteria-update.sh" "Hysteria2 更新模块"; then
         manage_hysteria_update
+    fi
+    wait_for_user
+}
+
+manage_manager_script_update() {
+    if safe_source_script "$SCRIPTS_DIR/manager-update.sh" "管理脚本更新模块"; then
+        manage_script_update
     fi
     wait_for_user
 }

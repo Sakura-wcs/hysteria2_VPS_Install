@@ -176,6 +176,7 @@ download_scripts() {
         "post-deploy-check.sh:部署后检查模块"
         "certificate-sync.sh:证书同步模块"
         "hysteria-update.sh:Hysteria2更新模块"
+        "manager-update.sh:管理脚本更新模块"
     )
 
     for script_info in "${scripts[@]}"; do
