@@ -107,7 +107,7 @@ setup_default_config() {
 
     # 项目信息
     PROJECT_NAME=${PROJECT_NAME:-"s-hy2"}
-    PROJECT_VERSION=${PROJECT_VERSION:-"1.1.2"}
+    PROJECT_VERSION=${PROJECT_VERSION:-"1.1.3"}
     PROJECT_REPO_URL=${PROJECT_REPO_URL:-"https://github.com/Sakura-wcs/hysteria2_VPS_Install"}
     PROJECT_RAW_URL=${PROJECT_RAW_URL:-"https://raw.githubusercontent.com/Sakura-wcs/hysteria2_VPS_Install/main"}
 

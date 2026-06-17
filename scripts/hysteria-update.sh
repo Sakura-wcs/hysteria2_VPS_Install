@@ -3,6 +3,8 @@
 set -uo pipefail
 
 HY_UPDATE_RELEASE_API="${HY_UPDATE_RELEASE_API:-https://api.github.com/repos/apernet/hysteria/releases/latest}"
+HY_UPDATE_TAGS_API="${HY_UPDATE_TAGS_API:-https://api.github.com/repos/apernet/hysteria/tags?per_page=20}"
+HY_UPDATE_LATEST_URL="${HY_UPDATE_LATEST_URL:-https://github.com/apernet/hysteria/releases/latest}"
 HY_UPDATE_INSTALL_URL="${HY_UPDATE_INSTALL_URL:-https://get.hy2.sh/}"
 
 hy_update_normalize_version() {
@@ -15,6 +17,39 @@ hy_update_normalize_version() {
 hy_update_extract_latest_tag() {
     local json="$1"
     echo "$json" | sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1
+}
+
+hy_update_extract_first_semver_tag() {
+    local json="$1"
+    local tag
+    while IFS= read -r tag; do
+        if [[ -n "$(hy_update_normalize_version "$tag")" ]]; then
+            echo "$tag"
+            return 0
+        fi
+    done < <(
+        echo "$json" |
+            grep -oE '"name"[[:space:]]*:[[:space:]]*"[^"]+"' |
+            sed -n 's/.*"name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p'
+    )
+}
+
+hy_update_extract_redirect_tag() {
+    local headers="$1"
+    echo "$headers" |
+        tr -d '\r' |
+        sed -n 's/^[Ll]ocation:[[:space:]]*.*\/tag\/\([^/?#[:space:]]*\).*/\1/p' |
+        tail -1
+}
+
+hy_update_curl_json() {
+    local url="$1"
+    curl -fsSL \
+        --connect-timeout 8 \
+        --max-time 20 \
+        -H "Accept: application/vnd.github+json" \
+        -H "User-Agent: s-hy2-manager" \
+        "$url"
 }
 
 hy_update_find_binary() {
@@ -62,9 +97,32 @@ hy_update_current_version() {
 }
 
 hy_update_latest_version() {
-    local json
-    json="$(curl -fsSL --connect-timeout 8 --max-time 20 "$HY_UPDATE_RELEASE_API")" || return 1
-    hy_update_normalize_version "$(hy_update_extract_latest_tag "$json")"
+    local json headers version
+
+    if json="$(hy_update_curl_json "$HY_UPDATE_RELEASE_API" 2>/dev/null)"; then
+        version="$(hy_update_normalize_version "$(hy_update_extract_latest_tag "$json")")"
+        if [[ -n "$version" ]]; then
+            echo "$version"
+            return 0
+        fi
+    fi
+
+    if json="$(hy_update_curl_json "$HY_UPDATE_TAGS_API" 2>/dev/null)"; then
+        version="$(hy_update_normalize_version "$(hy_update_extract_first_semver_tag "$json")")"
+        if [[ -n "$version" ]]; then
+            echo "$version"
+            return 0
+        fi
+    fi
+
+    headers="$(curl -fsSLI --connect-timeout 8 --max-time 20 "$HY_UPDATE_LATEST_URL" 2>/dev/null || true)"
+    version="$(hy_update_normalize_version "$(hy_update_extract_redirect_tag "$headers")")"
+    if [[ -n "$version" ]]; then
+        echo "$version"
+        return 0
+    fi
+
+    return 1
 }
 
 hy_update_is_newer() {
