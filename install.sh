@@ -119,6 +119,42 @@ backup_existing_config() {
 }
 
 # 安装 Hysteria2
+hysteria_find_binary() {
+    local candidate
+
+    candidate="$(command -v hysteria 2>/dev/null || true)"
+    if [[ -n "$candidate" && -x "$candidate" ]]; then
+        echo "$candidate"
+        return 0
+    fi
+
+    for candidate in /usr/local/bin/hysteria /usr/bin/hysteria /opt/hysteria/hysteria; do
+        if [[ -x "$candidate" ]]; then
+            echo "$candidate"
+            return 0
+        fi
+    done
+
+    return 1
+}
+
+hysteria_read_version() {
+    local binary="$1"
+    local output version
+
+    for arg in version --version -v; do
+        output="$("$binary" "$arg" 2>&1 || true)"
+        version="$(echo "$output" | grep -oE 'v?[0-9]+\.[0-9]+\.[0-9]+' | head -1 || true)"
+        if [[ -n "$version" ]]; then
+            version="${version#v}"
+            echo "$version"
+            return 0
+        fi
+    done
+
+    return 1
+}
+
 install_hysteria2_binary() {
     export HYSTERIA_INSTALL_METHOD="script"
     local install_script_url="https://get.hy2.sh/"
@@ -168,25 +204,17 @@ create_config_directory() {
 
 # 检查安装结果
 verify_installation() {
-    if ! command -v hysteria &> /dev/null; then
+    local binary
+    binary="$(hysteria_find_binary 2>/dev/null || true)"
+    if [[ -z "$binary" ]]; then
         log_error "二进制文件未找到"
         return 1
     fi
 
     local version
-    # 尝试多种方式获取版本号
-    version=$(hysteria version 2>/dev/null | head -1 || true)
+    version="$(hysteria_read_version "$binary" || true)"
 
-    if [[ -z "$version" ]]; then
-        version=$(hysteria --version 2>/dev/null | head -1 || true)
-    fi
-    if [[ -z "$version" ]]; then
-        version=$(hysteria -v 2>/dev/null | head -1 || true)
-    fi
-
-    # 提取版本号（支持多种格式）
     if [[ -n "$version" ]]; then
-        version=$(echo "$version" | grep -oE 'v?[0-9]+\.[0-9]+\.[0-9]+' | head -1 || true)
         echo "✓ 安装完成: $version"
     else
         echo "✓ 安装完成"
@@ -263,24 +291,11 @@ install_hysteria2() {
     echo ""
     
     # 检查是否已安装
-    if command -v hysteria &> /dev/null; then
+    local binary
+    binary="$(hysteria_find_binary 2>/dev/null || true)"
+    if [[ -n "$binary" ]]; then
         local version
-        # 尝试多种方式获取版本号
-        version=$(hysteria version 2>/dev/null | head -1 || true)
-
-        # 如果第一种方式失败，尝试其他方式
-        if [[ -z "$version" ]]; then
-            version=$(hysteria --version 2>/dev/null | head -1 || true)
-        fi
-        if [[ -z "$version" ]]; then
-            version=$(hysteria -v 2>/dev/null | head -1 || true)
-        fi
-
-        # 提取版本号（支持多种格式）
-        if [[ -n "$version" ]]; then
-            # 尝试提取 v2.x.x 或 2.x.x 格式
-            version=$(echo "$version" | grep -oE 'v?[0-9]+\.[0-9]+\.[0-9]+' | head -1 || true)
-        fi
+        version="$(hysteria_read_version "$binary" || true)"
 
         echo -e "${YELLOW}检测到已安装的 Hysteria2: ${version:-未知版本}${NC}"
         echo ""

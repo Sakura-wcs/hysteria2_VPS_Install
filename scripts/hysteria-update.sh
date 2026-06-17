@@ -17,16 +17,48 @@ hy_update_extract_latest_tag() {
     echo "$json" | sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1
 }
 
-hy_update_current_version() {
-    local output=""
+hy_update_find_binary() {
+    local candidate
 
-    if command -v hysteria >/dev/null 2>&1; then
-        output="$(hysteria version 2>/dev/null | head -1 || true)"
-        [[ -n "$output" ]] || output="$(hysteria --version 2>/dev/null | head -1 || true)"
-        [[ -n "$output" ]] || output="$(hysteria -v 2>/dev/null | head -1 || true)"
+    candidate="$(command -v hysteria 2>/dev/null || true)"
+    if [[ -n "$candidate" && -x "$candidate" ]]; then
+        echo "$candidate"
+        return 0
     fi
 
-    hy_update_normalize_version "$output"
+    for candidate in /usr/local/bin/hysteria /usr/bin/hysteria /opt/hysteria/hysteria; do
+        if [[ -x "$candidate" ]]; then
+            echo "$candidate"
+            return 0
+        fi
+    done
+
+    return 1
+}
+
+hy_update_binary_version() {
+    local binary="$1"
+    local output version
+
+    for arg in version --version -v; do
+        output="$("$binary" "$arg" 2>&1 || true)"
+        version="$(hy_update_normalize_version "$output")"
+        if [[ -n "$version" ]]; then
+            echo "$version"
+            return 0
+        fi
+    done
+
+    return 1
+}
+
+hy_update_current_version() {
+    local binary
+
+    binary="$(hy_update_find_binary 2>/dev/null || true)"
+    [[ -n "$binary" ]] || return 0
+
+    hy_update_binary_version "$binary" || true
 }
 
 hy_update_latest_version() {
