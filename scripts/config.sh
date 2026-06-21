@@ -79,6 +79,85 @@ get_current_listen_port() {
     fi
 }
 
+find_hysteria_service_file() {
+    local candidate
+
+    for candidate in \
+        "${1:-}" \
+        "/etc/systemd/system/hysteria-server.service" \
+        "/lib/systemd/system/hysteria-server.service" \
+        "/usr/lib/systemd/system/hysteria-server.service"; do
+        [[ -n "$candidate" && -f "$candidate" ]] || continue
+        echo "$candidate"
+        return 0
+    done
+
+    return 1
+}
+
+get_hysteria_service_user() {
+    local service_file
+    service_file="$(find_hysteria_service_file "${1:-}" 2>/dev/null || true)"
+
+    if [[ -n "$service_file" ]]; then
+        local user
+        user="$(sed -n 's/^[[:space:]]*User[[:space:]]*=[[:space:]]*//p' "$service_file" | tail -1)"
+        echo "${user:-root}"
+        return 0
+    fi
+
+    echo "hysteria"
+}
+
+get_hysteria_service_group() {
+    local service_file
+    service_file="$(find_hysteria_service_file "${1:-}" 2>/dev/null || true)"
+
+    if [[ -n "$service_file" ]]; then
+        local group user
+        group="$(sed -n 's/^[[:space:]]*Group[[:space:]]*=[[:space:]]*//p' "$service_file" | tail -1)"
+        if [[ -n "$group" ]]; then
+            echo "$group"
+            return 0
+        fi
+        user="$(get_hysteria_service_user "$service_file")"
+        echo "$user"
+        return 0
+    fi
+
+    echo "$(get_hysteria_service_user)"
+}
+
+set_hysteria_file_permissions() {
+    local owner
+    local group
+    owner="$(get_hysteria_service_user)"
+    group="$(get_hysteria_service_group)"
+
+    local file
+    for file in "$@"; do
+        [[ -n "$file" && -e "$file" ]] || continue
+
+        if id "$owner" >/dev/null 2>&1; then
+            chown "$owner:$group" "$file" 2>/dev/null || chown "$owner" "$file" 2>/dev/null || true
+        elif [[ "$owner" != "root" ]]; then
+            echo -e "${YELLOW}警告: 服务用户 $owner 不存在，无法设置 $file 的所有者${NC}" >&2
+        fi
+
+        case "$file" in
+            *.key|*privkey*.pem)
+                chmod 600 "$file" 2>/dev/null || true
+                ;;
+            *.crt|*.cer|*fullchain*.pem|*cert*.pem)
+                chmod 644 "$file" 2>/dev/null || true
+                ;;
+            *)
+                chmod 600 "$file" 2>/dev/null || true
+                ;;
+        esac
+    done
+}
+
 # ACME 配置模式
 configure_acme_mode() {
     echo -e "${BLUE}ACME 自动证书配置${NC}"
@@ -328,11 +407,7 @@ obfs:
         -subj "/CN=$cert_domain" \
         -days 3650
     
-    # 设置证书权限
-    if id "hysteria" &>/dev/null; then
-        chown hysteria:hysteria /etc/hysteria/server.key
-        chown hysteria:hysteria /etc/hysteria/server.crt
-    fi
+    set_hysteria_file_permissions /etc/hysteria/server.key /etc/hysteria/server.crt
     
     # 生成配置文件
     cat > "$CONFIG_PATH" << EOF
@@ -816,11 +891,7 @@ quick_setup_hysteria() {
         -subj "/CN=$best_domain" \
         -days 3650 &>/dev/null
 
-    # 设置证书权限
-    if id "hysteria" &>/dev/null; then
-        chown hysteria:hysteria /etc/hysteria/server.key
-        chown hysteria:hysteria /etc/hysteria/server.crt
-    fi
+    set_hysteria_file_permissions /etc/hysteria/server.key /etc/hysteria/server.crt
     echo "证书生成完成"
 
     # 5. 生成配置文件
@@ -852,11 +923,7 @@ obfs:
     password: $obfs_password
 EOF
 
-    # 设置配置文件权限
-    if id "hysteria" &>/dev/null; then
-        chown hysteria:hysteria "$CONFIG_PATH"
-    fi
-    chmod 600 "$CONFIG_PATH"
+    set_hysteria_file_permissions "$CONFIG_PATH"
     echo "配置文件生成完成"
 
     # 6. 配置端口跳跃
@@ -1014,11 +1081,7 @@ generate_hysteria_config() {
             ;;
     esac
     
-    # 设置配置文件权限
-    if id "hysteria" &>/dev/null; then
-        chown hysteria:hysteria "$CONFIG_PATH"
-    fi
-    chmod 600 "$CONFIG_PATH"
+    set_hysteria_file_permissions "$CONFIG_PATH"
     
     echo ""
     echo -e "${GREEN}配置文件已保存到: $CONFIG_PATH${NC}"

@@ -11,8 +11,13 @@ manager_update_files() {
 hy2-manager.sh
 install.sh
 quick-install.sh
+scripts/certificate-sync.sh
+scripts/config-loader.sh
+scripts/config.sh
 scripts/hysteria-update.sh
 scripts/manager-update.sh
+scripts/outbound-manager.sh
+scripts/post-deploy-check.sh
 config/app.conf
 README.md
 EOF
@@ -87,7 +92,7 @@ manage_script_update() {
     echo "安装目录: $MANAGER_UPDATE_INSTALL_DIR"
     echo ""
     echo "此操作只更新 s-hy2 管理脚本文件，不会修改 /etc/hysteria 配置，也不会更新 Hysteria2 内核。"
-    echo "更新范围: 主菜单、安装入口、快速安装器、更新模块、版本配置和 README。"
+    echo "更新范围: 主菜单、安装入口、快速安装器、更新模块、配置/证书权限相关模块、版本配置和 README。"
     echo ""
     echo -n "是否开始更新管理脚本? [y/N]: "
 

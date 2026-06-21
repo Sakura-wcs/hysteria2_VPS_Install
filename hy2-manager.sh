@@ -1,10 +1,10 @@
 #!/bin/bash
 
 # Hysteria2 配置管理脚本
-# 版本: 1.1.3
+# 版本: 1.1.4
 # 作者: Hysteria2 Manager
 
-readonly SCRIPT_VERSION="1.1.3"
+readonly SCRIPT_VERSION="1.1.4"
 
 # 颜色定义
 readonly RED='\033[0;31m'
@@ -51,6 +51,81 @@ TEMPLATES_DIR="$SCRIPT_DIR/templates"
 CONFIG_PATH="/etc/hysteria/config.yaml"
 SERVER_DOMAIN_CONFIG="/etc/hysteria/server-domain.conf"
 SERVICE_NAME="hysteria-server.service"
+
+find_hysteria_service_file() {
+    local candidate
+
+    for candidate in \
+        "${1:-}" \
+        "/etc/systemd/system/hysteria-server.service" \
+        "/lib/systemd/system/hysteria-server.service" \
+        "/usr/lib/systemd/system/hysteria-server.service"; do
+        [[ -n "$candidate" && -f "$candidate" ]] || continue
+        echo "$candidate"
+        return 0
+    done
+
+    return 1
+}
+
+get_hysteria_service_user() {
+    local service_file
+    service_file="$(find_hysteria_service_file "${1:-}" 2>/dev/null || true)"
+
+    if [[ -n "$service_file" ]]; then
+        local user
+        user="$(sed -n 's/^[[:space:]]*User[[:space:]]*=[[:space:]]*//p' "$service_file" | tail -1)"
+        echo "${user:-root}"
+        return 0
+    fi
+
+    echo "hysteria"
+}
+
+get_hysteria_service_group() {
+    local service_file
+    service_file="$(find_hysteria_service_file "${1:-}" 2>/dev/null || true)"
+
+    if [[ -n "$service_file" ]]; then
+        local group user
+        group="$(sed -n 's/^[[:space:]]*Group[[:space:]]*=[[:space:]]*//p' "$service_file" | tail -1)"
+        if [[ -n "$group" ]]; then
+            echo "$group"
+            return 0
+        fi
+        user="$(get_hysteria_service_user "$service_file")"
+        echo "$user"
+        return 0
+    fi
+
+    echo "$(get_hysteria_service_user)"
+}
+
+set_hysteria_file_permissions() {
+    local owner group file
+    owner="$(get_hysteria_service_user)"
+    group="$(get_hysteria_service_group)"
+
+    for file in "$@"; do
+        [[ -n "$file" && -e "$file" ]] || continue
+
+        if id "$owner" >/dev/null 2>&1; then
+            chown "$owner:$group" "$file" 2>/dev/null || chown "$owner" "$file" 2>/dev/null || true
+        fi
+
+        case "$file" in
+            *.key|*privkey*.pem)
+                chmod 600 "$file" 2>/dev/null || true
+                ;;
+            *.crt|*.cer|*fullchain*.pem|*cert*.pem)
+                chmod 644 "$file" 2>/dev/null || true
+                ;;
+            *)
+                chmod 600 "$file" 2>/dev/null || true
+                ;;
+        esac
+    done
+}
 
 # 加载新功能模块
 load_new_modules() {
@@ -725,10 +800,7 @@ generate_self_signed_cert() {
     if openssl req -x509 -nodes -newkey rsa:2048 -keyout "$key_file" -out "$cert_file" -days 365 \
         -subj "/C=US/ST=State/L=City/O=Organization/CN=$cert_domain" 2>/dev/null; then
         
-        # 设置权限
-        chmod 600 "$key_file"
-        chmod 644 "$cert_file"
-        chown hysteria:hysteria "$cert_file" "$key_file" 2>/dev/null || true
+        set_hysteria_file_permissions "$cert_file" "$key_file"
         
         log_success "自签名证书生成成功"
         echo "证书文件: $cert_file"
@@ -797,10 +869,7 @@ upload_custom_cert() {
     mkdir -p "$cert_dir"
     
     if cp "$cert_path" "$new_cert_file" && cp "$key_path" "$new_key_file"; then
-        # 设置权限
-        chmod 600 "$new_key_file"
-        chmod 644 "$new_cert_file"
-        chown hysteria:hysteria "$new_cert_file" "$new_key_file" 2>/dev/null || true
+        set_hysteria_file_permissions "$new_cert_file" "$new_key_file"
         
         log_success "证书文件上传成功"
         echo "新证书文件: $new_cert_file"

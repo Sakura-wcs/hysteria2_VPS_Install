@@ -31,6 +31,35 @@ if [[ -z "${CHECK_TIMEOUT:-}" ]]; then
     readonly CHECK_TIMEOUT=10
 fi
 
+get_hysteria_service_owner() {
+    local service_file user group
+    for service_file in \
+        "/etc/systemd/system/hysteria-server.service" \
+        "/lib/systemd/system/hysteria-server.service" \
+        "/usr/lib/systemd/system/hysteria-server.service"; do
+        [[ -f "$service_file" ]] || continue
+        user="$(sed -n 's/^[[:space:]]*User[[:space:]]*=[[:space:]]*//p' "$service_file" | tail -1)"
+        group="$(sed -n 's/^[[:space:]]*Group[[:space:]]*=[[:space:]]*//p' "$service_file" | tail -1)"
+        user="${user:-root}"
+        group="${group:-$user}"
+        echo "$user:$group"
+        return 0
+    done
+
+    echo "hysteria:hysteria"
+}
+
+set_hysteria_config_permissions() {
+    local target_file="$1"
+    local owner
+    [[ -n "$target_file" && -e "$target_file" ]] || return 1
+    owner="$(get_hysteria_service_owner)"
+    if id "${owner%%:*}" >/dev/null 2>&1; then
+        chown "$owner" "$target_file" 2>/dev/null || true
+    fi
+    chmod 600 "$target_file" 2>/dev/null
+}
+
 # 全面部署检查
 comprehensive_deploy_check() {
     log_info "开始全面部署检查"
@@ -723,12 +752,16 @@ fix_common_issues() {
     echo "3. 检查文件权限"
     if [[ -f "$HYSTERIA_CONFIG" ]]; then
         if [[ ! -r "$HYSTERIA_CONFIG" ]]; then
-            if chmod 644 "$HYSTERIA_CONFIG"; then
-                echo "  ✅ 已修复配置文件权限"
+            if set_hysteria_config_permissions "$HYSTERIA_CONFIG"; then
+                echo "  ✅ 已按 hysteria-server.service 运行用户修复配置文件权限"
                 ((fixed_count++))
             fi
         else
-            echo "  ✅ 配置文件权限正常"
+            if set_hysteria_config_permissions "$HYSTERIA_CONFIG"; then
+                echo "  ✅ 配置文件权限正常"
+            else
+                echo "  ❌ 配置文件权限修复失败"
+            fi
         fi
     fi
 

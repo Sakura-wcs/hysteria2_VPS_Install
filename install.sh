@@ -188,12 +188,44 @@ configure_system_service() {
     return 0
 }
 
+find_hysteria_service_file() {
+    local candidate
+
+    for candidate in \
+        "/etc/systemd/system/hysteria-server.service" \
+        "/lib/systemd/system/hysteria-server.service" \
+        "/usr/lib/systemd/system/hysteria-server.service"; do
+        [[ -f "$candidate" ]] || continue
+        echo "$candidate"
+        return 0
+    done
+
+    return 1
+}
+
+get_hysteria_service_owner() {
+    local service_file user group
+    service_file="$(find_hysteria_service_file 2>/dev/null || true)"
+
+    if [[ -n "$service_file" ]]; then
+        user="$(sed -n 's/^[[:space:]]*User[[:space:]]*=[[:space:]]*//p' "$service_file" | tail -1)"
+        group="$(sed -n 's/^[[:space:]]*Group[[:space:]]*=[[:space:]]*//p' "$service_file" | tail -1)"
+        user="${user:-root}"
+        group="${group:-$user}"
+        echo "$user:$group"
+    else
+        echo "hysteria:hysteria"
+    fi
+}
+
 # 创建配置目录
 create_config_directory() {
     if mkdir -p /etc/hysteria 2>/dev/null; then
         chmod 755 /etc/hysteria
-        if id hysteria &>/dev/null; then
-            chown hysteria:hysteria /etc/hysteria 2>/dev/null
+        local owner
+        owner="$(get_hysteria_service_owner)"
+        if id "${owner%%:*}" &>/dev/null; then
+            chown "$owner" /etc/hysteria 2>/dev/null || chown "${owner%%:*}" /etc/hysteria 2>/dev/null || true
         fi
         mkdir -p /etc/hysteria2/certs 2>/dev/null || true
         chmod 755 /etc/hysteria2 /etc/hysteria2/certs 2>/dev/null || true

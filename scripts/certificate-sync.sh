@@ -7,6 +7,75 @@ CERT_SYNC_CONFIG_PATH="${CERT_SYNC_CONFIG_PATH:-/etc/hysteria/config.yaml}"
 CERT_SYNC_CRON_SCHEDULE="${CERT_SYNC_CRON_SCHEDULE:-0 4 * * *}"
 CERT_SYNC_MARKER="s-hy2-cert-sync"
 
+cert_sync_find_service_file() {
+    local candidate
+
+    for candidate in \
+        "/etc/systemd/system/hysteria-server.service" \
+        "/lib/systemd/system/hysteria-server.service" \
+        "/usr/lib/systemd/system/hysteria-server.service"; do
+        [[ -f "$candidate" ]] || continue
+        echo "$candidate"
+        return 0
+    done
+
+    return 1
+}
+
+cert_sync_service_user() {
+    local service_file user
+    service_file="$(cert_sync_find_service_file 2>/dev/null || true)"
+
+    if [[ -n "$service_file" ]]; then
+        user="$(sed -n 's/^[[:space:]]*User[[:space:]]*=[[:space:]]*//p' "$service_file" | tail -1)"
+        echo "${user:-root}"
+    else
+        echo "hysteria"
+    fi
+}
+
+cert_sync_service_group() {
+    local service_file group user
+    service_file="$(cert_sync_find_service_file 2>/dev/null || true)"
+
+    if [[ -n "$service_file" ]]; then
+        group="$(sed -n 's/^[[:space:]]*Group[[:space:]]*=[[:space:]]*//p' "$service_file" | tail -1)"
+        if [[ -n "$group" ]]; then
+            echo "$group"
+            return 0
+        fi
+    fi
+
+    user="$(cert_sync_service_user)"
+    echo "$user"
+}
+
+cert_sync_set_service_permissions() {
+    local owner group file
+    owner="$(cert_sync_service_user)"
+    group="$(cert_sync_service_group)"
+
+    for file in "$@"; do
+        [[ -n "$file" && -e "$file" ]] || continue
+
+        if id "$owner" >/dev/null 2>&1; then
+            chown "$owner:$group" "$file" 2>/dev/null || chown "$owner" "$file" 2>/dev/null || true
+        fi
+
+        case "$file" in
+            *.key|*privkey*.pem)
+                chmod 600 "$file" 2>/dev/null || true
+                ;;
+            *.crt|*.cer|*fullchain*.pem|*cert*.pem)
+                chmod 644 "$file" 2>/dev/null || true
+                ;;
+            *)
+                chmod 600 "$file" 2>/dev/null || true
+                ;;
+        esac
+    done
+}
+
 cert_sync_log() {
     echo "$*"
 }
@@ -105,9 +174,7 @@ cert_sync_copy_domain_cert() {
     mkdir -p "$dest_dir" || return 1
     cp "$cert_source" "$dest_cert" || return 1
     cp "$key_source" "$dest_key" || return 1
-    chmod 644 "$dest_cert" 2>/dev/null || true
-    chmod 600 "$dest_key" 2>/dev/null || true
-    chown hysteria:hysteria "$dest_cert" "$dest_key" 2>/dev/null || true
+    cert_sync_set_service_permissions "$dest_cert" "$dest_key"
 
     printf '%s|%s\n' "$dest_cert" "$dest_key"
 }
@@ -145,6 +212,8 @@ cert_sync_update_tls_config() {
             echo "  key: $key_file"
         } >> "$config_file"
     fi
+
+    cert_sync_set_service_permissions "$config_file" "$cert_file" "$key_file"
 }
 
 cert_sync_script_path() {
