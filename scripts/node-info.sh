@@ -2,6 +2,35 @@
 
 # Hysteria2 节点信息显示脚本
 
+uri_encode() {
+    local input="$1" output="" char code
+    local i
+
+    LC_ALL=C
+    for ((i = 0; i < ${#input}; i++)); do
+        char="${input:i:1}"
+        if [[ "$char" =~ [a-zA-Z0-9.~_-] ]]; then
+            output+="$char"
+        else
+            printf -v code '%%%02X' "'${char}"
+            output+="$code"
+        fi
+    done
+
+    printf '%s' "$output"
+}
+
+yaml_quote() {
+    local value="$1"
+    value="${value//\\/\\\\}"
+    value="${value//\"/\\\"}"
+    printf '"%s"' "$value"
+}
+
+json_quote() {
+    yaml_quote "$1"
+}
+
 # 从配置文件解析信息
 parse_config_info() {
     local config_file="$CONFIG_PATH"
@@ -103,27 +132,28 @@ generate_node_link() {
     local sni_domain="$5"
     local insecure="$6"
     
-    local link="hysteria2://$auth_password@$server_ip:$port"
-    local params=""
+    local encoded_auth encoded_host encoded_sni encoded_obfs link params
+    encoded_auth="$(uri_encode "$auth_password")"
+    encoded_host="$(uri_encode "$server_ip")"
+    encoded_sni="$(uri_encode "$sni_domain")"
+    encoded_obfs="$(uri_encode "$obfs_password")"
+    link="hysteria2://$encoded_auth@$encoded_host:$port"
+    params="insecure=0"
     
     if [[ -n "$sni_domain" ]]; then
-        params="${params}&sni=$sni_domain"
+        params="${params}&sni=$encoded_sni"
     fi
     
     if [[ "$insecure" == "true" ]]; then
-        params="${params}&insecure=1"
+        params="insecure=1&${params}"
     fi
     
     if [[ -n "$obfs_password" ]]; then
-        params="${params}&obfs=salamander&obfs-password=$obfs_password"
+        params="${params}&obfs=salamander&obfs-password=$encoded_obfs"
     fi
     
     # 移除开头的&
-    params="${params#&}"
-    
-    if [[ -n "$params" ]]; then
-        link="${link}?${params}"
-    fi
+    link="${link}?${params}"
     
     link="${link}#Hysteria2-Server"
     
@@ -146,9 +176,9 @@ generate_clash_config() {
 proxies:
   - name: "Hysteria2-Server"
     type: hysteria2
-    server: $server_address
+    server: $(yaml_quote "$server_address")
     port: $port
-    password: $auth_password
+    password: $(yaml_quote "$auth_password")
 EOF
     
     # 添加端口跳跃配置
@@ -165,13 +195,13 @@ EOF
     if [[ -n "$obfs_password" ]]; then
         cat << EOF
     obfs: salamander
-    obfs-password: "$obfs_password"
+    obfs-password: $(yaml_quote "$obfs_password")
 EOF
     fi
     
     if [[ -n "$sni_domain" ]]; then
         cat << EOF
-    sni: $sni_domain
+    sni: $(yaml_quote "$sni_domain")
 EOF
     fi
     
@@ -201,16 +231,16 @@ generate_singbox_config() {
 {
   "type": "hysteria2",
   "tag": "Hysteria2-Server",
-  "server": "$server_address",
+  "server": $(json_quote "$server_address"),
   "server_port": $port,
-  "password": "$auth_password",
+  "password": $(json_quote "$auth_password"),
 EOF
     
     if [[ -n "$obfs_password" ]]; then
         cat << EOF
   "obfs": {
     "type": "salamander",
-    "password": "$obfs_password"
+    "password": $(json_quote "$obfs_password")
   },
 EOF
     fi
@@ -222,7 +252,7 @@ EOF
     
     if [[ -n "$sni_domain" ]]; then
         cat << EOF
-    "server_name": "$sni_domain",
+    "server_name": $(json_quote "$sni_domain"),
 EOF
     fi
     
@@ -292,16 +322,16 @@ generate_singbox_pc_config() {
     {
       "type": "hysteria2",
       "tag": "Hysteria2-Server",
-      "server": "$server_address",
+      "server": $(json_quote "$server_address"),
       "server_port": $port,
-      "password": "$auth_password",
+      "password": $(json_quote "$auth_password"),
 EOF
     
     if [[ -n "$obfs_password" ]]; then
         cat << EOF
       "obfs": {
         "type": "salamander",
-        "password": "$obfs_password"
+        "password": $(json_quote "$obfs_password")
       },
 EOF
     fi
@@ -313,7 +343,7 @@ EOF
     
     if [[ -n "$sni_domain" ]]; then
         cat << EOF
-        "server_name": "$sni_domain",
+        "server_name": $(json_quote "$sni_domain"),
 EOF
     fi
     
@@ -388,11 +418,11 @@ generate_client_config() {
 
     cat << EOF
 # Hysteria2 官方客户端配置
-server: $server_address:$port
-auth: $auth_password
+server: $(yaml_quote "$server_address:$port")
+auth: $(yaml_quote "$auth_password")
 
 tls:
-  sni: $sni_domain
+  sni: $(yaml_quote "$sni_domain")
   insecure: $insecure
 
 EOF
@@ -402,7 +432,7 @@ EOF
 obfs:
   type: salamander
   salamander:
-    password: $obfs_password
+    password: $(yaml_quote "$obfs_password")
 
 EOF
     fi
