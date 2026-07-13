@@ -59,4 +59,21 @@ menu_text="$(config_advanced_menu_text)"
 assert_contains "$menu_text" '编辑完整 YAML'
 assert_not_contains "$menu_text" '编辑带宽、TLS/ACME、认证、混淆、伪装、出站和路由'
 
+diagnostic_collect() {
+    DIAGNOSTIC_RESULTS=""
+    DIAGNOSTIC_REPAIRABLE=$'file-permissions\n'
+}
+
+diagnostic_repair() {
+    printf 'repaired:%s\n' "$1"
+}
+
+if diagnostic_output="$(printf '1\ny\n' | diagnostic_show 2>&1)"; then
+    diagnostic_status=0
+else
+    diagnostic_status=$?
+fi
+assert_equals 0 "$diagnostic_status"
+assert_contains "$diagnostic_output" 'repaired:file-permissions'
+
 finish_tests

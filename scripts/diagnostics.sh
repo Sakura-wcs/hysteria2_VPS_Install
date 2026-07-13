@@ -151,7 +151,7 @@ diagnostic_repair() {
 }
 
 diagnostic_show() {
-    local line id status message
+    local line id status message selected_repair
     diagnostic_collect
     echo ""
     echo "=== Hysteria2 配置自检 ==="
@@ -180,9 +180,10 @@ diagnostic_show() {
     read -r choice
     [[ "$choice" =~ ^[0-9]+$ ]] || return 0
     ((choice > 0 && choice <= ${#repairs[@]})) || return 0
-    echo -n "确认修复 ${repairs[choice - 1]}? [y/N]: "
+    selected_repair="${repairs[choice - 1]}"
+    echo -n "确认修复 ${selected_repair}? [y/N]: "
     read -r choice
-    [[ "$choice" =~ ^[Yy]$ ]] && diagnostic_repair "${repairs[choice - 1]}"
+    [[ "$choice" =~ ^[Yy]$ ]] && diagnostic_repair "$selected_repair"
 }
 
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
