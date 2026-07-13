@@ -12,4 +12,16 @@ assert_equals installed-newer "$(hy_update_decision 2.9.2 2.10.0)"
 assert_equals unknown-current "$(hy_update_decision 2.9.2 '')"
 assert_equals unavailable-latest "$(hy_update_decision '' 2.9.2)"
 
+HY_UPDATE_INSTALL_CALL=""
+curl() {
+    printf '%s\n' '#!/usr/bin/env bash'
+}
+
+bash() {
+    HY_UPDATE_INSTALL_CALL="$*"
+}
+
+hy_update_install_or_upgrade --force
+assert_contains "$HY_UPDATE_INSTALL_CALL" '--force'
+
 finish_tests

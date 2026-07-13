@@ -166,7 +166,7 @@ hy_update_decision() {
 }
 
 hy_update_install_or_upgrade() {
-    bash <(curl -fsSL "$HY_UPDATE_INSTALL_URL")
+    bash <(curl -fsSL "$HY_UPDATE_INSTALL_URL") "$@"
 }
 
 manage_hysteria_update() {
@@ -189,7 +189,7 @@ manage_hysteria_update() {
             echo "当前已是最新版本，无需更新。"
             echo -n "是否强制通过官方脚本重新安装 Hysteria2? [y/N]: "
             read -r choice
-            [[ "$choice" =~ ^[Yy]$ ]] && hy_update_install_or_upgrade
+            [[ "$choice" =~ ^[Yy]$ ]] && hy_update_install_or_upgrade --force
             return 0
             ;;
         upgrade)
