@@ -138,6 +138,33 @@ hy_update_is_newer() {
     [[ "$(printf '%s\n%s\n' "$current" "$latest" | sort -V | tail -1)" == "$latest" ]]
 }
 
+hy_update_decision() {
+    local latest current
+    latest="$(hy_update_normalize_version "$1")"
+    current="$(hy_update_normalize_version "$2")"
+
+    [[ -n "$latest" ]] || {
+        echo "unavailable-latest"
+        return 0
+    }
+
+    [[ -n "$current" ]] || {
+        echo "unknown-current"
+        return 0
+    }
+
+    [[ "$latest" == "$current" ]] && {
+        echo "current"
+        return 0
+    }
+
+    if hy_update_is_newer "$latest" "$current"; then
+        echo "upgrade"
+    else
+        echo "installed-newer"
+    fi
+}
+
 hy_update_install_or_upgrade() {
     bash <(curl -fsSL "$HY_UPDATE_INSTALL_URL")
 }
@@ -154,18 +181,40 @@ manage_hysteria_update() {
     echo "最新版本: ${latest:-无法获取}"
     echo ""
 
-    if [[ -n "$latest" ]] && hy_update_is_newer "$latest" "$current"; then
-        echo "检测到新版本。"
-    elif [[ -n "$current" && -n "$latest" ]]; then
-        echo "当前已是最新版本。"
-    fi
+    local decision choice
+    decision="$(hy_update_decision "$latest" "$current")"
 
-    echo -n "是否通过官方脚本安装/更新 Hysteria2? [y/N]: "
-    local choice
-    read -r choice
-    if [[ "$choice" =~ ^[Yy]$ ]]; then
-        hy_update_install_or_upgrade
-    fi
+    case "$decision" in
+        current)
+            echo "当前已是最新版本，无需更新。"
+            echo -n "是否强制通过官方脚本重新安装 Hysteria2? [y/N]: "
+            read -r choice
+            [[ "$choice" =~ ^[Yy]$ ]] && hy_update_install_or_upgrade
+            return 0
+            ;;
+        upgrade)
+            echo "检测到新版本。"
+            echo -n "是否通过官方脚本更新 Hysteria2? [y/N]: "
+            read -r choice
+            [[ "$choice" =~ ^[Yy]$ ]] && hy_update_install_or_upgrade
+            return 0
+            ;;
+        installed-newer)
+            echo "当前安装版本高于检测到的最新稳定版本，未执行更新。"
+            return 0
+            ;;
+        unknown-current)
+            echo "无法检测当前版本，可选择通过官方脚本安装或修复。"
+            echo -n "是否通过官方脚本安装 Hysteria2? [y/N]: "
+            read -r choice
+            [[ "$choice" =~ ^[Yy]$ ]] && hy_update_install_or_upgrade
+            return 0
+            ;;
+        *)
+            echo "无法获取最新版本，未执行更新。"
+            return 1
+            ;;
+    esac
 }
 
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
