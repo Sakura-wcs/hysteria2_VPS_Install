@@ -30,13 +30,20 @@ HYSTERIA_BIN="$TEST_TMP/hysteria"
 printf '%s\n' 'listen: :443' 'auth:' '  type: password' '  password: test' > "$DIAGNOSTIC_CONFIG"
 cat > "$HYSTERIA_BIN" <<'EOF'
 #!/usr/bin/env bash
-[[ "$1" == config && "$2" == check && -f "$3" ]]
+if [[ "$1" == server && "$2" == --config && -f "$3" ]]; then
+    echo 'server up and running' >&2
+    sleep 2
+    exit 0
+fi
+exit 2
 EOF
 chmod +x "$HYSTERIA_BIN"
-export DIAGNOSTIC_CONFIG HYSTERIA_BIN
+CONFIG_VALIDATE_TIMEOUT=1
+export DIAGNOSTIC_CONFIG HYSTERIA_BIN CONFIG_VALIDATE_TIMEOUT
 
 DIAGNOSTIC_RESULTS=""
 DIAGNOSTIC_REPAIRABLE=""
+source "$ROOT/scripts/config-validator.sh"
 source "$ROOT/scripts/diagnostics.sh"
 diagnostic_collect
 assert_contains "$DIAGNOSTIC_RESULTS" 'config:ok'
@@ -48,5 +55,8 @@ printf '%s\n' 'listen: :443' 'auth:' '  type: password' '  password: test' > "$c
 source "$ROOT/scripts/config-advanced.sh"
 config_advanced_apply "$candidate"
 assert_file_contains "$CONFIG_ADVANCED_PATH" 'listen: :443'
+menu_text="$(config_advanced_menu_text)"
+assert_contains "$menu_text" '编辑完整 YAML'
+assert_not_contains "$menu_text" '编辑带宽、TLS/ACME、认证、混淆、伪装、出站和路由'
 
 finish_tests

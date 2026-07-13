@@ -15,6 +15,9 @@ source "$ROOT/scripts/manager-update.sh"
 assert_contains "$(manager_update_files)" 'scripts/diagnostics.sh'
 assert_contains "$(manager_update_files)" 'scripts/network-tuning.sh'
 assert_contains "$(manager_update_files)" 'scripts/config-advanced.sh'
+assert_contains "$(manager_update_files)" 'scripts/config-validator.sh'
 assert_not_contains "$(manager_update_files)" 'scripts/performance-utils.sh'
+
+bash -c "source '$ROOT/scripts/config-advanced.sh'; declare -F config_validate_with_core >/dev/null" || fail 'advanced configuration should load its validator dependency'
 
 finish_tests

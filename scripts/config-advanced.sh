@@ -1,5 +1,10 @@
 #!/usr/bin/env bash
 
+if ! declare -F config_validate_with_core >/dev/null; then
+    # shellcheck source=/dev/null
+    source "$(dirname "${BASH_SOURCE[0]}")/config-validator.sh"
+fi
+
 config_advanced_target() {
     printf '%s' "${CONFIG_ADVANCED_PATH:-${CONFIG_PATH:-/etc/hysteria/config.yaml}}"
 }
@@ -15,7 +20,7 @@ config_advanced_apply() {
     target_dir="$(dirname "$target")"
 
     [[ -f "$candidate" ]] || return 1
-    "$binary" config check "$candidate" || return 1
+    config_validate_with_core "$candidate" || return 1
     mkdir -p "$target_dir" || return 1
 
     replacement="$(mktemp "$target_dir/.config.yaml.s-hy2.XXXXXX")" || return 1
@@ -99,20 +104,25 @@ config_advanced_edit_scalar() {
     config_advanced_set_scalar "$key" "$value"
 }
 
+config_advanced_menu_text() {
+    cat <<'EOF'
+=== 高级配置 ===
+1. 编辑完整 YAML（全部官方服务端字段）
+2. 修改监听地址和端口
+3. 修改忽略客户端带宽
+4. 修改 UDP 空闲超时
+5. 修改禁用 UDP
+6. 修改 ACL 文件路径
+0. 返回
+EOF
+}
+
 config_advanced_menu() {
     local choice
     while true; do
         clear
-        echo "=== 高级配置 ==="
-        echo "1. 编辑完整 YAML（保留所有官方字段）"
-        echo "2. 修改监听地址和端口"
-        echo "3. 修改忽略客户端带宽"
-        echo "4. 修改 UDP 空闲超时"
-        echo "5. 修改禁用 UDP"
-        echo "6. 修改 ACL 文件路径"
-        echo "7. 编辑带宽、TLS/ACME、认证、混淆、伪装、出站和路由"
-        echo "0. 返回"
-        echo -n "请选择 [0-7]: "
+        config_advanced_menu_text
+        echo -n "请选择 [0-6]: "
         read -r choice
         case "$choice" in
             1) config_advanced_edit_full_yaml ;;
@@ -121,7 +131,6 @@ config_advanced_menu() {
             4) config_advanced_edit_scalar udpIdleTimeout "UDP 空闲超时" ;;
             5) config_advanced_edit_scalar disableUDP "禁用 UDP" ;;
             6) config_advanced_edit_scalar acl "ACL 文件路径" ;;
-            7) config_advanced_edit_full_yaml ;;
             0) return 0 ;;
             *) echo "无效选项" ;;
         esac

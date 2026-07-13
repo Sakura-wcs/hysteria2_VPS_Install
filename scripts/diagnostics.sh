@@ -1,5 +1,10 @@
 #!/usr/bin/env bash
 
+if ! declare -F config_validate_with_core >/dev/null; then
+    # shellcheck source=/dev/null
+    source "$(dirname "${BASH_SOURCE[0]}")/config-validator.sh"
+fi
+
 DIAGNOSTIC_CONFIG_PATH="${DIAGNOSTIC_CONFIG:-${CONFIG_PATH:-/etc/hysteria/config.yaml}}"
 DIAGNOSTIC_HYSTERIA_BIN="${HYSTERIA_BIN:-hysteria}"
 DIAGNOSTIC_SERVICE_NAME="${SERVICE_NAME:-hysteria-server.service}"
@@ -22,7 +27,7 @@ diagnostic_check_config() {
         return
     fi
 
-    if "$DIAGNOSTIC_HYSTERIA_BIN" config check "$DIAGNOSTIC_CONFIG_PATH" >/dev/null 2>&1; then
+    if config_validate_with_core "$DIAGNOSTIC_CONFIG_PATH" >/dev/null 2>&1; then
         diagnostic_add config ok "配置语法和当前内核兼容"
     else
         diagnostic_add config error "配置语法错误或与当前内核不兼容"

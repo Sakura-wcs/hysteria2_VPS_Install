@@ -15,6 +15,7 @@ scripts/certificate-sync.sh
 scripts/config-loader.sh
 scripts/config.sh
 scripts/config-advanced.sh
+scripts/config-validator.sh
 scripts/diagnostics.sh
 scripts/hysteria-update.sh
 scripts/manager-update.sh
