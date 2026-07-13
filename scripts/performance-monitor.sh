@@ -9,11 +9,6 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 
-# 加载性能工具
-if [[ -f "$SCRIPT_DIR/performance-utils.sh" ]]; then
-    source "$SCRIPT_DIR/performance-utils.sh"
-fi
-
 # 性能监控配置
 MONITOR_LOG="$PROJECT_DIR/logs/performance.log"
 BENCHMARK_LOG="$PROJECT_DIR/logs/benchmark.log"

@@ -1,10 +1,10 @@
 #!/bin/bash
 
 # Hysteria2 配置管理脚本
-# 版本: 1.1.4
+# 版本: 1.2.0
 # 作者: Hysteria2 Manager
 
-readonly SCRIPT_VERSION="1.1.4"
+readonly SCRIPT_VERSION="1.2.0"
 
 # 颜色定义
 readonly RED='\033[0;31m'
@@ -2689,26 +2689,190 @@ init_script() {
 
 # Modern maintenance overrides. These functions intentionally sit near the end
 # so Bash uses them instead of the older menu text above.
+LOADED_MODULES=""
+
+load_module() {
+    local name="$1" file="$2"
+    [[ " ${LOADED_MODULES} " == *" ${name} "* ]] && return 0
+    if [[ ! -r "$SCRIPTS_DIR/$file" ]]; then
+        log_error "模块不存在: $file"
+        return 1
+    fi
+    # shellcheck source=/dev/null
+    source "$SCRIPTS_DIR/$file" || return 1
+    LOADED_MODULES+=" $name"
+}
+
+load_new_modules() {
+    load_module common common.sh
+}
+
+check_dependencies() {
+    local command
+    for command in curl systemctl; do
+        command -v "$command" >/dev/null 2>&1 || {
+            log_error "缺少必要命令: $command"
+            exit 1
+        }
+    done
+}
+
+confirm_config_reset() {
+    echo "此操作会重置当前 Hysteria2 配置，并在继续前创建备份。"
+    echo -n "确认继续? [y/N]: "
+    local choice
+    read -r choice
+    [[ "$choice" =~ ^[Yy]$ ]]
+}
+
+manage_configuration_menu() {
+    local choice
+    while true; do
+        clear
+        echo "=== 配置管理 ==="
+        echo "1. 创建或重置配置"
+        echo "2. 修改当前配置"
+        echo "3. 高级配置（完整 YAML / 官方字段）"
+        echo "0. 返回"
+        echo -n "请选择 [0-3]: "
+        read -r choice
+        case "$choice" in
+            1)
+                echo "1. 快速配置"
+                echo "2. 手动配置"
+                echo -n "请选择 [1-2]: "
+                read -r choice
+                confirm_config_reset || continue
+                case "$choice" in
+                    1) quick_config ;;
+                    2) manual_config ;;
+                esac
+                ;;
+            2) config_management ;;
+            3)
+                load_module config-advanced config-advanced.sh && config_advanced_menu
+                ;;
+            0) return 0 ;;
+        esac
+    done
+}
+
+manage_service_diagnostics_menu() {
+    local choice
+    echo "=== 服务与诊断 ==="
+    echo "1. 服务管理"
+    echo "2. 配置自检和修复"
+    echo "0. 返回"
+    echo -n "请选择 [0-2]: "
+    read -r choice
+    case "$choice" in
+        1) manage_service ;;
+        2)
+            load_module network-tuning network-tuning.sh
+            load_module firewall firewall-manager.sh
+            load_module diagnostics diagnostics.sh && diagnostic_show
+            wait_for_user
+            ;;
+    esac
+}
+
+manage_network_system_menu() {
+    local choice
+    echo "=== 网络与系统 ==="
+    echo "1. BBR / FQ 管理"
+    echo "2. 防火墙管理"
+    echo "0. 返回"
+    echo -n "请选择 [0-2]: "
+    read -r choice
+    case "$choice" in
+        1) load_module network-tuning network-tuning.sh && network_manage_bbr_fq ;;
+        2) load_module firewall firewall-manager.sh && manage_firewall ;;
+    esac
+}
+
+manage_install_update_menu() {
+    local choice
+    echo "=== 安装与更新 ==="
+    echo "1. 安装 Hysteria2"
+    echo "2. 检查 / 更新 Hysteria2 内核"
+    echo "0. 返回"
+    echo -n "请选择 [0-2]: "
+    read -r choice
+    case "$choice" in
+        1) install_hysteria ;;
+        2) manage_hysteria_core_update ;;
+    esac
+}
+
+manage_outbound_firewall_menu() {
+    local choice
+    echo "=== 出站与防火墙 ==="
+    echo "1. 出站规则"
+    echo "2. 防火墙管理"
+    echo "0. 返回"
+    echo -n "请选择 [0-2]: "
+    read -r choice
+    case "$choice" in
+        1) load_module outbound outbound-manager.sh && manage_outbound ;;
+        2) load_module firewall firewall-manager.sh && manage_firewall ;;
+    esac
+}
+
+manage_about_update_menu() {
+    local choice
+    echo "=== 关于与脚本更新 ==="
+    echo "1. 关于脚本"
+    echo "2. 更新管理脚本"
+    echo "0. 返回"
+    echo -n "请选择 [0-2]: "
+    read -r choice
+    case "$choice" in
+        1) about_script ;;
+        2) manage_manager_script_update ;;
+    esac
+}
+
 print_menu() {
     echo -e "${YELLOW}请选择操作:${NC}"
     echo ""
-    echo -e "${GREEN} 1.${NC} 安装 Hysteria2"
-    echo -e "${GREEN} 2.${NC} 快速配置"
-    echo -e "${GREEN} 3.${NC} 手动配置"
-    echo -e "${GREEN} 4.${NC} 修改配置"
-    echo -e "${GREEN} 5.${NC} 域名管理"
-    echo -e "${GREEN} 6.${NC} 证书管理"
-    echo -e "${GREEN} 7.${NC} 服务管理"
-    echo -e "${GREEN} 8.${NC} 订阅/节点信息"
-    echo -e "${CYAN} 9.${NC} 出站规则"
-    echo -e "${CYAN}10.${NC} 防火墙管理"
-    echo -e "${GREEN}11.${NC} 卸载服务"
-    echo -e "${GREEN}12.${NC} 关于脚本"
-    echo -e "${CYAN}13.${NC} 检查/更新 Hysteria2 内核"
-    echo -e "${CYAN}14.${NC} 更新管理脚本"
+    echo -e "${GREEN} 1.${NC} 安装与更新"
+    echo -e "${GREEN} 2.${NC} 配置管理"
+    echo -e "${GREEN} 3.${NC} 服务与诊断"
+    echo -e "${GREEN} 4.${NC} 网络与系统"
+    echo -e "${GREEN} 5.${NC} 节点与订阅"
+    echo -e "${GREEN} 6.${NC} 证书与域名"
+    echo -e "${CYAN} 7.${NC} 出站与防火墙"
+    echo -e "${GREEN} 8.${NC} 卸载服务"
+    echo -e "${GREEN} 9.${NC} 关于与脚本更新"
     echo -e "${RED} 0.${NC} 退出"
     echo ""
-    echo -n -e "${BLUE}请输入选项 [0-14]: ${NC}"
+    echo -n -e "${BLUE}请输入选项 [0-9]: ${NC}"
+}
+
+main() {
+    check_root
+    check_script_integrity
+    trap 'echo -e "\n${RED}脚本被中断${NC}"; exit 130' INT
+    while true; do
+        print_header
+        show_status
+        print_menu
+        local choice
+        read -r choice
+        case "$choice" in
+            1) manage_install_update_menu ;;
+            2) manage_configuration_menu ;;
+            3) manage_service_diagnostics_menu ;;
+            4) manage_network_system_menu ;;
+            5) show_node_info ;;
+            6) domain_management ; certificate_management ;;
+            7) manage_outbound_firewall_menu ;;
+            8) uninstall_hysteria ;;
+            9) manage_about_update_menu ;;
+            0) exit 0 ;;
+            *) log_error "请输入 0-9 之间的选项"; sleep 1 ;;
+        esac
+    done
 }
 
 manage_hysteria_core_update() {

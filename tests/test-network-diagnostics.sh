@@ -42,4 +42,11 @@ diagnostic_collect
 assert_contains "$DIAGNOSTIC_RESULTS" 'config:ok'
 assert_contains "$DIAGNOSTIC_REPAIRABLE" 'network-bbr-fq'
 
+CONFIG_ADVANCED_PATH="$TEST_TMP/live-config.yaml"
+candidate="$TEST_TMP/candidate.yaml"
+printf '%s\n' 'listen: :443' 'auth:' '  type: password' '  password: test' > "$candidate"
+source "$ROOT/scripts/config-advanced.sh"
+config_advanced_apply "$candidate"
+assert_file_contains "$CONFIG_ADVANCED_PATH" 'listen: :443'
+
 finish_tests

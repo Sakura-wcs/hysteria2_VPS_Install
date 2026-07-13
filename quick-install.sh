@@ -172,11 +172,13 @@ download_scripts() {
         "firewall-manager.sh:防火墙管理模块"
         "outbound-manager.sh:出站管理模块"
         "performance-monitor.sh:性能监控模块"
-        "performance-utils.sh:性能工具模块"
         "post-deploy-check.sh:部署后检查模块"
         "certificate-sync.sh:证书同步模块"
+        "config-advanced.sh:高级配置模块"
+        "diagnostics.sh:配置自检模块"
         "hysteria-update.sh:Hysteria2更新模块"
         "manager-update.sh:管理脚本更新模块"
+        "network-tuning.sh:BBR/FQ网络模块"
     )
 
     for script_info in "${scripts[@]}"; do

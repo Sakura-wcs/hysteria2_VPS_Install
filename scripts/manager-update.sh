@@ -14,8 +14,11 @@ quick-install.sh
 scripts/certificate-sync.sh
 scripts/config-loader.sh
 scripts/config.sh
+scripts/config-advanced.sh
+scripts/diagnostics.sh
 scripts/hysteria-update.sh
 scripts/manager-update.sh
+scripts/network-tuning.sh
 scripts/outbound-manager.sh
 scripts/post-deploy-check.sh
 config/app.conf
