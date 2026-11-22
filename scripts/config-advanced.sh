@@ -47,9 +47,18 @@ config_advanced_apply() {
 }
 
 config_advanced_edit_full_yaml() {
-    local target candidate editor
+    local target candidate editor fallback
     target="$(config_advanced_target)"
-    editor="${EDITOR:-nano}"
+    editor="${VISUAL:-${EDITOR:-}}"
+    if [[ -z "$editor" ]]; then
+        for fallback in nano vi vim; do
+            if command -v "$fallback" >/dev/null 2>&1; then editor="$fallback"; break; fi
+        done
+    fi
+    if [[ -z "$editor" ]] || ! command -v "$editor" >/dev/null 2>&1; then
+        echo '未找到可用编辑器；请安装 nano、vi 或 vim，或设置 VISUAL / EDITOR。' >&2
+        return 1
+    fi
     candidate="$(mktemp "$(dirname "$target")/.config.yaml.edit.XXXXXX")" || return 1
     chmod 600 "$candidate"
     [[ -f "$target" ]] && cp -a "$target" "$candidate"
@@ -112,7 +121,6 @@ config_advanced_menu_text() {
 3. 修改忽略客户端带宽
 4. 修改 UDP 空闲超时
 5. 修改禁用 UDP
-6. 修改 ACL 文件路径
 0. 返回
 EOF
 }
@@ -122,19 +130,18 @@ config_advanced_menu() {
     while true; do
         clear
         config_advanced_menu_text
-        echo -n "请选择 [0-6]: "
-        read -r choice
+        echo -n "请选择 [0-5]: "
+        read -r choice || return 0
         case "$choice" in
             1) config_advanced_edit_full_yaml ;;
             2) config_advanced_edit_scalar listen "监听地址和端口" ;;
             3) config_advanced_edit_scalar ignoreClientBandwidth "忽略客户端带宽" ;;
             4) config_advanced_edit_scalar udpIdleTimeout "UDP 空闲超时" ;;
             5) config_advanced_edit_scalar disableUDP "禁用 UDP" ;;
-            6) config_advanced_edit_scalar acl "ACL 文件路径" ;;
             0) return 0 ;;
             *) echo "无效选项" ;;
         esac
-        read -r -p "按回车键继续..."
+        read -r -p "按回车键继续..." || return 0
     done
 }
 

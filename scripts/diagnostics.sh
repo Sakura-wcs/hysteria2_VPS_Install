@@ -28,9 +28,11 @@ diagnostic_check_config() {
     fi
 
     if config_validate_with_core "$DIAGNOSTIC_CONFIG_PATH" >/dev/null 2>&1; then
-        diagnostic_add config ok "配置语法和当前内核兼容"
+        diagnostic_add config ok '临时配置通过内核启动探测'
+    elif [[ "$?" -eq 2 ]]; then
+        diagnostic_add config warning '缺少 timeout 或 Python 3/PyYAML，未验证配置'
     else
-        diagnostic_add config error "配置语法错误或与当前内核不兼容"
+        diagnostic_add config error '临时配置未通过内核启动探测'
     fi
 }
 

@@ -17,15 +17,6 @@ else
     exit 1
 fi
 
-# 加载安全模块
-if [[ -f "$SCRIPT_DIR/scripts/input-validation.sh" ]]; then
-    source "$SCRIPT_DIR/scripts/input-validation.sh"
-fi
-
-if [[ -f "$SCRIPT_DIR/scripts/secure-download.sh" ]]; then
-    source "$SCRIPT_DIR/scripts/secure-download.sh"
-fi
-
 # 获取系统信息
 get_system_info() {
     if [[ -f /etc/os-release ]]; then
@@ -382,33 +373,32 @@ install_hysteria2() {
 }
 
 # 卸载函数 (如果需要在这里处理)
-uninstall_hysteria2() {
-    log_info "卸载 Hysteria2..."
-    
-    # 停止服务
-    if systemctl is-active --quiet hysteria-server; then
-        systemctl stop hysteria-server
-        log_info "已停止服务"
-    fi
-    
-    # 禁用服务
-    if systemctl is-enabled --quiet hysteria-server 2>/dev/null; then
-        systemctl disable hysteria-server
-        log_info "已禁用服务"
-    fi
-    
-    # 使用官方卸载方法
-    if curl -fsSL https://get.hy2.sh/ | bash -s -- --remove; then
-        log_success "Hysteria2 卸载成功"
-    else
-        log_error "卸载失败，请手动清理"
+uninstall_hysteria2() (
+    local installer
+    installer="$(mktemp)" || return 1
+    trap 'rm -f -- "$installer"' EXIT
+    if ! curl -fsSL --proto '=https' --proto-redir '=https' --connect-timeout 8 --max-time 30 \
+        https://get.hy2.sh/ -o "$installer" || [[ ! -s "$installer" ]] || ! bash -n "$installer"; then
+        log_error '无法获取有效的官方卸载脚本，未执行卸载。'
         return 1
     fi
-    
-    return 0
-}
+    if ! timeout 300 bash "$installer" --remove || hysteria_find_binary >/dev/null ||
+        systemctl is-active --quiet hysteria-server.service 'hysteria-server@*.service'; then
+        log_error '官方卸载未完成，请检查核心和服务状态。'
+        return 1
+    fi
+    log_success 'Hysteria2 核心已卸载；保留配置、证书和系统依赖。'
+)
 
 # 如果脚本被直接运行
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
-    install_hysteria2
+    if [[ "${1:-}" == --remove ]]; then
+        if [[ "$EUID" -ne 0 ]]; then
+            log_error '卸载核心需要 root 权限。'
+            exit 1
+        fi
+        uninstall_hysteria2
+    else
+        install_hysteria2
+    fi
 fi

@@ -142,52 +142,6 @@ error_exit() {
     exit "$exit_code"
 }
 
-# 设置错误陷阱
-setup_error_handling() {
-    # 捕获各种信号
-    trap 'handle_error $? $LINENO' ERR
-    trap 'handle_signal INT "中断信号"' INT
-    trap 'handle_signal TERM "终止信号"' TERM
-    trap 'handle_signal HUP "挂起信号"' HUP
-}
-
-# 错误处理器
-handle_error() {
-    local exit_code=$1
-    local line_number=$2
-
-    log_error "脚本执行失败: 退出码 $exit_code, 行号 $line_number"
-
-    # 显示调用栈
-    local i=0
-    while [[ ${FUNCNAME[$i]} ]]; do
-        log_debug "调用栈 $i: ${FUNCNAME[$i]} (${BASH_SOURCE[$i]}:${BASH_LINENO[$i]})"
-        ((i++))
-    done
-
-    # 执行清理
-    if command -v cleanup >/dev/null 2>&1; then
-        cleanup "$exit_code"
-    fi
-
-    exit "$exit_code"
-}
-
-# 信号处理器
-handle_signal() {
-    local signal="$1"
-    local description="$2"
-
-    log_info "接收到 $description ($signal), 正在清理..."
-
-    # 执行清理
-    if command -v cleanup >/dev/null 2>&1; then
-        cleanup 130
-    fi
-
-    exit 130
-}
-
 # 默认清理函数
 cleanup() {
     local exit_code="${1:-0}"

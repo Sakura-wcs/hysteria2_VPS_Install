@@ -4,6 +4,7 @@ set -u
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "$ROOT/tests/test-helper.sh"
+case "$OSTYPE" in msys*|cygwin*) export CONFIG_VALIDATE_PYTHON="${CONFIG_VALIDATE_PYTHON:-python}" ;; esac
 
 TEST_TMP="$(mktemp -d)"
 trap 'rm -rf "$TEST_TMP"' EXIT
@@ -30,8 +31,8 @@ HYSTERIA_BIN="$TEST_TMP/hysteria"
 printf '%s\n' 'listen: :443' 'auth:' '  type: password' '  password: test' > "$DIAGNOSTIC_CONFIG"
 cat > "$HYSTERIA_BIN" <<'EOF'
 #!/usr/bin/env bash
-if [[ "$1" == server && "$2" == --config && -f "$3" ]]; then
-    echo 'server up and running' >&2
+if [[ "$1" == server && "$2" == --config && "$3" == *.yaml && -f "$3" && "$5 $6 $7 $8" == '--log-level info --log-format json' ]]; then
+    echo '{"level":"info","msg":"server up and running"}' >&2
     sleep 2
     exit 0
 fi
@@ -49,14 +50,31 @@ diagnostic_collect
 assert_contains "$DIAGNOSTIC_RESULTS" 'config:ok'
 assert_contains "$DIAGNOSTIC_REPAIRABLE" 'network-bbr-fq'
 
+DIAGNOSTIC_RESULTS=''
+CONFIG_VALIDATE_PYTHON="$TEST_TMP/missing-python" diagnostic_check_config || true
+assert_contains "$DIAGNOSTIC_RESULTS" 'config:warning:'
+assert_contains "$DIAGNOSTIC_RESULTS" 'PyYAML'
+
 CONFIG_ADVANCED_PATH="$TEST_TMP/live-config.yaml"
 candidate="$TEST_TMP/candidate.yaml"
 printf '%s\n' 'listen: :443' 'auth:' '  type: password' '  password: test' > "$candidate"
 source "$ROOT/scripts/config-advanced.sh"
 config_advanced_apply "$candidate"
 assert_file_contains "$CONFIG_ADVANCED_PATH" 'listen: :443'
+(
+    unset EDITOR VISUAL
+    command() {
+        [[ "${1:-}" != -v || "${2:-}" != nano ]] || return 1
+        builtin command "$@"
+    }
+    nano() { return 1; }
+    vi() { printf '\n# edited with vi\n' >> "$1"; }
+    config_advanced_edit_full_yaml >/dev/null
+) || fail 'validated editor did not fall back to vi when nano was unavailable'
+assert_file_contains "$CONFIG_ADVANCED_PATH" '# edited with vi'
 menu_text="$(config_advanced_menu_text)"
 assert_contains "$menu_text" '编辑完整 YAML'
+assert_not_contains "$menu_text" '修改 ACL 文件路径'
 assert_not_contains "$menu_text" '编辑带宽、TLS/ACME、认证、混淆、伪装、出站和路由'
 
 diagnostic_collect() {
